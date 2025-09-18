@@ -1,6 +1,7 @@
 from django.db import models
 from django.contrib.auth.models import AbstractUser, Group, Permission
 from django.core.validators import MinValueValidator, MaxValueValidator
+import uuid
 
 # Create your models here.
 
@@ -74,10 +75,23 @@ class Booking(models.Model):
         ('CANCELLED', 'Cancelled'),
         ('COMPLETED', 'Completed'),
     )
+    id = models.UUIDField(default=uuid.uuid4, primary_key=True, editable=False)
     room = models.ForeignKey(Room, on_delete=models.CASCADE, related_name='bookings')
     customer = models.ForeignKey(User, on_delete= models.CASCADE, related_name='bookings')
     status = models.CharField(max_length=20, choices=STATUS_CHOICES, default='PENDING')
     created_at = models.DateTimeField(auto_now_add=True)
+    total_amount = models.DecimalField(max_digits=10, decimal_places=2)
+    checked_in_date = models.DateField()
+    checked_out_date = models.DateField()
+    nights = models.PositiveIntegerField(editable=False)
+
+
+    def save(self, *args, **kwargs):
+        if self.checked_in_date and self.checked_out_date:
+            self.nights = (self.checked_out_date - self.checked_in_date).days
+            self.total_amount = self.nights * self.room.price_per_night
+        return super().save(*args, **kwargs)
+
 
 class Payment(models.Model):
     PAYMENT_CHOICES = (
@@ -86,9 +100,24 @@ class Payment(models.Model):
         ('KHALTI', 'Khalti'),
         ('CASH', 'Cash'),
     )
+    STATUS_CHOICES = (
+        ('PENDING', 'Pending'),
+        ('COMPLETED', 'Completed'),
+        ('FAILED', 'Failed'),
+        ('REFUNDED', 'Refunded'),
+    )
+    id = models.UUIDField(primary_key=True, default=uuid.uuid4, editable=False)
     booking = models.OneToOneField(Booking, on_delete=models.CASCADE, related_name='payment')
-    amount = models.DecimalField(decimal_places=2, max_digits=10)
+    amount = models.DecimalField(decimal_places=2, max_digits=10, blank=True, null=True)
     payment_choices = models.CharField(max_length=10,choices = PAYMENT_CHOICES, default='CASH')
+    status = models.CharField(max_length=12, default='PENDING', choices=STATUS_CHOICES)
+    transaction_id = models.CharField(max_length=100, blank=True, null=True)
+    created_at = models.DateTimeField(auto_now_add=True)
+
+    def save(self, *args, **kwargs):
+        self.amount = self.booking.total_amount
+        return super().save(*args, **kwargs)
+
 
 
 class Review(models.Model):
