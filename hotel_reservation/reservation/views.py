@@ -1,11 +1,14 @@
 from django.shortcuts import render
-from .serializers import UserCreateSerializer, HotelSerializers, RoomSerializer, ReviewSerializer
+from .serializers import UserCreateSerializer, HotelSerializers, RoomSerializer, ReviewSerializer, PaymentSerializer, BookingSerializer
 from rest_framework.generics import CreateAPIView
-from .models import User, Hotel, Room, Review
+from .models import User, Hotel, Room, Review, Payment, Booking
 from rest_framework.permissions import AllowAny
 from rest_framework_simplejwt.authentication import JWTAuthentication
 from rest_framework import viewsets
-from rest_framework.permissions import BasePermission, SAFE_METHODS
+from rest_framework.permissions import BasePermission, SAFE_METHODS, IsAuthenticated, IsAuthenticatedOrReadOnly
+from rest_framework.decorators import api_view
+from rest_framework.response import Response
+from rest_framework import status
 # from rest_framework.decorators import api_view, authentication_classes, permission_classes
 # from django.http.response import Response 
 
@@ -103,3 +106,43 @@ class ReviewView(viewsets.ModelViewSet):
 
     def get_queryset(self):
         return super().get_queryset()
+
+class BookingView(viewsets.ModelViewSet):
+    queryset = Booking.objects.all()
+    serializer_class = BookingSerializer
+
+    def perform_create(self, serializer):
+        serializer.save(customer = self.request.user)
+
+    
+class PaymentView(viewsets.ModelViewSet):
+    queryset = Payment.objects.all()
+    serializer_class = PaymentSerializer
+    authentication_classes = [JWTAuthentication]
+
+    def perform_create(self, serializer):
+        booking_id = self.kwargs.get('booking_pk')
+        booking = Booking.objects.get(id=booking_id)
+        serializer.save(booking = booking)
+
+
+@api_view(['POST'])
+def callback_esewa(request):
+    pid = request.data.get('pid')
+    refId = request.data.get('refId')
+    amt = request.data.get('amt')
+    status_from_gateway = request.data.get('status')
+
+    try:
+        payment = Payment.objects.get(id=pid)
+    except Payment.DoesNotExist:
+        return Response({"error": "Payment not found"}, status=status.HTTP_404_NOT_FOUND) 
+    
+    payment.transaction_id = refId
+    if status_from_gateway == "success":
+        payment.status = "COMPLETED"
+    else:
+        payment.status = "FAILED"
+    payment.save()
+
+    return Response({"message": "Payment updated"}, status=status.HTTP_200_OK)
