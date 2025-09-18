@@ -70,7 +70,28 @@ class ReviewSerializer(serializers.ModelSerializer):
 
     def get_hotel_name(self, obj):
         return obj.hotel.name
+    
+class BookingSerializer(serializers.ModelSerializer):
 
+    class Meta:
+        model = Booking
+        fields = ['id','room', 'customer', 'status', 'created_at', 'checked_in_date', 'checked_out_date', 'total_amount']
+        read_only_fields = ['id','customer', 'status', 'created_at', 'total_amount']
+
+
+class PaymentSerializer(serializers.ModelSerializer):
+    class Meta:
+        model = Payment
+        fields = [
+            "id",
+            "booking",
+            "amount",
+            "payment_choices",
+            "status",
+            "transaction_id",
+            "created_at",
+        ]
+        read_only_fields = ["id", "booking", "amount", "status", "transaction_id", "created_at"]
 
 
 
